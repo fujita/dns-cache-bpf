@@ -18,6 +18,7 @@
  */
 
 use byteorder::{NativeEndian, ReadBytesExt};
+use clap::{App, Arg};
 use std::ffi::CString;
 use std::time::Duration;
 
@@ -41,7 +42,17 @@ unsafe fn as_u8_slice<T: Sized>(p: &T) -> &[u8] {
 }
 
 fn main() {
-    let dev_name = CString::new("ens5").unwrap();
+    let args = App::new("dns-cache")
+        .arg(
+            Arg::with_name("DEV")
+                .long("dev")
+                .takes_value(true)
+                .required(true)
+                .help("specify device name (e.g, eth0)"),
+        )
+        .get_matches();
+
+    let dev_name = CString::new(args.value_of("DEV").unwrap()).unwrap();
     let mut builder = DnsCacheSkelBuilder::default();
     builder.obj_builder.debug(true);
 

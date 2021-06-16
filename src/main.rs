@@ -20,6 +20,8 @@
 use byteorder::{NativeEndian, ReadBytesExt};
 use clap::{App, Arg};
 use std::ffi::CString;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 #[path = "bpf/.output/dns_cache.skel.rs"]
@@ -53,6 +55,14 @@ fn main() {
         .get_matches();
 
     let dev_name = CString::new(args.value_of("DEV").unwrap()).unwrap();
+
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })
+    .unwrap();
+
     let mut builder = DnsCacheSkelBuilder::default();
     builder.obj_builder.debug(true);
 
@@ -61,12 +71,6 @@ fn main() {
     let mut skel = open_skel.load().unwrap();
 
     let ifidx = unsafe { libc::if_nametoindex(dev_name.into_raw()) };
-
-    // unload the attached code
-    unsafe {
-        libbpf_sys::bpf_set_link_xdp_fd(ifidx as i32, -1, 0);
-    };
-
     let p = skel.obj.prog_mut("xdp_dns_handler").unwrap();
 
     unsafe {
@@ -77,7 +81,7 @@ fn main() {
     };
 
     println!("\nDNS cache started");
-    loop {
+    while running.load(Ordering::SeqCst) {
         std::thread::sleep(Duration::from_secs(30));
 
         let hit = 0;
